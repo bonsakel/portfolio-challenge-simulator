@@ -1,0 +1,195 @@
+{
+  "retrieved_at_utc": "2026-10-28T04:12:24.330774+00:00",
+  "requested_date_range": {
+    "start_inclusive": "2003-03-01",
+    "end_exclusive": "2024-10-13"
+  },
+  "warmup": {
+    "required_trading_days": 252,
+    "available_daily_returns_before_first_training_start": 273,
+    "purpose": "Initialize rolling windows and observations without lookahead."
+  },
+  "sources": {
+    "etf_prices": "Yahoo Finance via yfinance",
+    "vix": "CBOE"
+  },
+  "package_versions": {
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "scipy": "1.17.1",
+    "yfinance": "1.7.0",
+    "PyPortfolioOpt": "1.6.0",
+    "gymnasium": "1.4.0",
+    "stable-baselines3": "2.9.2",
+    "matplotlib": "3.11.2",
+    "PyYAML": "6.0.3",
+    "pytest": "9.2.0"
+  },
+  "adjustment": "Adjusted Close is used for ETF return calculations. Raw downloads retain OHLC, adjusted close, and volume.",
+  "missing_data_treatment": "No forward-filling or interpolation. Aligned outputs exclude dates without valid observations for every ETF and VIX. Returns use adjacent source observations; rows with missing current or previous ETF prices are excluded to avoid treating multi-day price changes as daily returns.",
+  "etfs": {
+    "XLB": {
+      "source": "Yahoo Finance (XLB) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLB.csv"
+    },
+    "XLE": {
+      "source": "Yahoo Finance (XLE) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLE.csv"
+    },
+    "XLF": {
+      "source": "Yahoo Finance (XLF) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLF.csv"
+    },
+    "XLI": {
+      "source": "Yahoo Finance (XLI) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLI.csv"
+    },
+    "XLK": {
+      "source": "Yahoo Finance (XLK) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLK.csv"
+    },
+    "XLP": {
+      "source": "Yahoo Finance (XLP) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLP.csv"
+    },
+    "XLU": {
+      "source": "Yahoo Finance (XLU) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLU.csv"
+    },
+    "XLV": {
+      "source": "Yahoo Finance (XLV) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLV.csv"
+    },
+    "XLY": {
+      "source": "Yahoo Finance (XLY) via yfinance",
+      "first_date": "2003-03-03",
+      "last_date": "2024-10-11",
+      "missing_adjusted_close_rows": 0,
+      "raw_file": "data/raw/etf_prices/XLY.csv"
+    }
+  },
+  "vix": {
+    "first_date": "2003-03-03",
+    "last_date": "2024-10-11",
+    "missing_close_rows_excluded": 0,
+    "raw_file": "data/raw/vix/VIX_History.csv",
+    "source_url": "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
+  },
+  "configured_period_coverage": {
+    "global_financial_crisis": {
+      "training": {
+        "first_observation": "2004-04-01",
+        "last_observation": "2006-10-06",
+        "rows": 635
+      },
+      "validation": {
+        "first_observation": "2006-10-09",
+        "last_observation": "2007-10-08",
+        "rows": 251
+      },
+      "downturn_test": {
+        "first_observation": "2007-10-09",
+        "last_observation": "2009-03-09",
+        "rows": 356
+      },
+      "recovery_observation": {
+        "first_observation": "2009-03-10",
+        "last_observation": "2011-03-09",
+        "rows": 505
+      }
+    },
+    "covid_crash": {
+      "training": {
+        "first_observation": "2016-02-19",
+        "last_observation": "2019-02-15",
+        "rows": 754
+      },
+      "validation": {
+        "first_observation": "2019-02-19",
+        "last_observation": "2020-02-18",
+        "rows": 252
+      },
+      "downturn_test": {
+        "first_observation": "2020-02-19",
+        "last_observation": "2020-03-23",
+        "rows": 24
+      },
+      "recovery_observation": {
+        "first_observation": "2020-03-24",
+        "last_observation": "2022-03-23",
+        "rows": 505
+      }
+    },
+    "2022_downturn": {
+      "training": {
+        "first_observation": "2018-01-03",
+        "last_observation": "2020-12-31",
+        "rows": 755
+      },
+      "validation": {
+        "first_observation": "2021-01-04",
+        "last_observation": "2021-12-31",
+        "rows": 252
+      },
+      "downturn_test": {
+        "first_observation": "2022-01-03",
+        "last_observation": "2022-10-12",
+        "rows": 196
+      },
+      "recovery_observation": {
+        "first_observation": "2022-10-13",
+        "last_observation": "2024-10-11",
+        "rows": 502
+      }
+    }
+  },
+  "aligned_data": {
+    "first_date": "2003-03-03",
+    "last_date": "2024-10-11",
+    "rows": 5442,
+    "rows_excluded_for_missing_observations": 19,
+    "daily_return_rows": 5441,
+    "daily_return_first_date": "2003-03-04",
+    "daily_return_last_date": "2024-10-11",
+    "assets": [
+      "XLB",
+      "XLE",
+      "XLF",
+      "XLI",
+      "XLK",
+      "XLP",
+      "XLU",
+      "XLV",
+      "XLY"
+    ],
+    "files": {
+      "adjusted_close": "data/processed/daily_returns/adjusted_close.csv",
+      "daily_returns": "data/processed/daily_returns/daily_returns.csv",
+      "vix": "data/processed/daily_returns/vix.csv"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+assets:
+  - XLB
+  - XLE
+  - XLF
+  - XLI
+  - XLK
+  - XLP
+  - XLU
+  - XLV
+  - XLY
+
+data:
+  etf_source: yfinance
+  volatility_source: CBOE
+  volatility_ticker: VIX
+  price_field: adjusted_close
+  warmup_trading_days: 252
+
+portfolio:
+  initial_capital: 100000
+  long_only: true
+  max_weight: 0.30
+  fully_invested: true
+  transaction_cost_rate: 0.001
+
+backtest:
+  decision_timing: after_previous_close_before_current_day_return
+  initial_weights: equal_weight
+  turnover_definition: sum_absolute_weight_changes
+  transaction_cost_base: pre_trade_portfolio_value_times_turnover
+  fee_timing: deduct_once_before_current_day_return
+  test_period_endpoints: inclusive
+  reward: natural_log_of_net_daily_portfolio_return
+  recovery_reference_peak: initial_capital_at_downturn_start
+  recovery_time_unit: trading_days_from_downturn_trough
+  recovery_return_reference: downturn_trough_value_to_recovery_period_end
+  metrics:
+    annualization_trading_days: 252
+    risk_free_rate_daily: 0.0
+
+traditional_strategies:
+  equal_weight:
+    rebalance: monthly
+  mean_variance:
+    lookback_trading_days: 252
+    rebalance: daily
+    max_weight: 0.30
+    turnover_threshold: 0.02
+    risk_free_rate_daily: 0.0 # Explicit zero-rate assumption; no RF asset return data.
+  minimum_variance:
+    lookback_trading_days: 252
+    rebalance: daily
+    max_weight: 0.30
+    turnover_threshold: 0.02
+
+reinforcement_learning:
+  algorithms:
+    - PPO
+    - DDPG
+  observation:
+    return_lookback_trading_days: 20
+    includes_current_weights: true
+    includes_vix: true
+    includes_vix_change: true
+    vix_change_measure: absolute_points_over_20_trading_days
+    expected_size: 191
+  action:
+    input_bounds: [-1.0, 1.0]
+    map_to_desired_weights: affine_to_[0,1]
+    weight_conversion: euclidean_projection_onto_capped_simplex
+  rebalance: daily
+  reward: daily_log_portfolio_return_minus_transaction_costs
+  episode_length_trading_days: 252
+  episode_start_selection: random_contiguous_window_within_training_period
+  normalization:
+    observations: true
+    rewards_during_training: true
+    clip_obs: 10.0
+    clip_reward: 10.0
+  validation:
+    eval_freq: 2520
+    n_eval_episodes: 1
+    selection_metric: mean_validation_episode_reward
+    reward_normalization: false
+  training:
+    ppo:
+      total_timesteps: 100000
+      learning_rate: 0.0003
+      n_steps: 256
+      batch_size: 64
+      gamma: 0.99
+    ddpg:
+      total_timesteps: 100000
+      learning_rate: 0.001
+      buffer_size: 100000
+      learning_starts: 1000
+      batch_size: 128
+      tau: 0.005
+      gamma: 0.99
+      train_freq: 1
+      gradient_steps: 1
+      action_noise_std: 0.1
+
+events:
+  global_financial_crisis:
+    training: ["2004-04-01", "2006-10-06"]
+    validation: ["2006-10-09", "2007-10-08"]
+    downturn_test: ["2007-10-09", "2009-03-09"]
+    recovery_observation: ["2009-03-10", "2011-03-09"]
+  covid_crash:
+    training: ["2016-02-19", "2019-02-18"]
+    validation: ["2019-02-19", "2020-02-18"]
+    downturn_test: ["2020-02-19", "2020-03-23"]
+    recovery_observation: ["2020-03-24", "2022-03-23"]
+  2022_downturn:
+    training: ["2018-01-03", "2021-01-01"]
+    validation: ["2021-01-04", "2021-12-31"]
+    downturn_test: ["2022-01-03", "2022-10-12"]
+    recovery_observation: ["2022-10-13", "2024-10-12"]
+
+reproducibility:
+  random_seed: 42

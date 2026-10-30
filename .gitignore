@@ -1,0 +1,29 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Downloaded and generated artifacts
+data/raw/*.csv
+data/raw/**/*.csv
+data/processed/daily_returns/*.csv
+results/models/*
+results/logs/*
+
+# Local environment and editor files
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# PortfolioLab app
+node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+data/portfoliolab/
+*.sqlite3
+*.db
+.vscode/
