@@ -134,6 +134,68 @@ export type ResearchOverview = {
   findings: { text: string; evidence: string }[];
   caveats: string[];
 };
+export type MetricSpread = { mean: number | null; min: number | null; max: number | null };
+export type ResearchDashboardSeries = {
+  dates: string[];
+  sample_returns: number[][];
+  sample_transaction_costs: number[][];
+  portfolio_value: number[];
+  value_min: number[];
+  value_max: number[];
+  drawdown: number[];
+  drawdown_min: number[];
+  drawdown_max: number[];
+  cumulative_cost: number[];
+  turnover: number[];
+  weights: Record<string, number[]>;
+  seed_count: number;
+};
+export type ResearchDashboardStrategy = {
+  metrics: {
+    total_return: MetricSpread;
+    annualized_return: MetricSpread;
+    annualized_volatility: MetricSpread;
+    sharpe_ratio: MetricSpread;
+    maximum_drawdown: MetricSpread;
+    transaction_costs: MetricSpread;
+  };
+  recovery: {
+    recovery_return_from_trough: MetricSpread;
+    recovery_time_trading_days: MetricSpread;
+    ending_value: MetricSpread;
+    recovered_count: number;
+    sample_count: number;
+  };
+  series: ResearchDashboardSeries;
+};
+export type ResearchDashboardEvent = {
+  event: string;
+  windows: Record<string, [string, string]>;
+  strategies: Record<string, ResearchDashboardStrategy>;
+};
+export type ResearchDashboardData = {
+  source: "five_seed_study" | "original_single_seed";
+  seed_count: number;
+  reference_capital: number;
+  annualization_trading_days: number;
+  risk_free_rate_daily: number;
+  strategies: string[];
+  events: ResearchDashboardEvent[];
+};
+export type ResearchPipeline = {
+  status: "not_started" | "running" | "complete";
+  completed_models: number;
+  completed_simulations: number;
+  total_models: number;
+  robustness_ready: boolean;
+  baseline_available: boolean;
+  steps: {
+    id: string;
+    label: string;
+    status: "complete" | "in_progress" | "pending" | "current";
+    detail: string;
+  }[];
+};
 export type ResearchVerification = {
   event: string;
   period_start: string;

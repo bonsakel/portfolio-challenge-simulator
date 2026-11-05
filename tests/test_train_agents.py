@@ -6,7 +6,7 @@ import pytest
 from stable_baselines3 import DDPG, PPO
 
 from src.data.download import load_config
-from src.experiments.train_agents import make_model, train_agent
+from src.experiments.train_agents import Algorithm, make_model, train_agent
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def test_make_model_builds_configured_sb3_algorithm(
 
 @pytest.mark.parametrize("algorithm", ["PPO", "DDPG"])
 def test_train_agent_saves_validation_best_model_and_normalization(
-    algorithm: str,
+    algorithm: Algorithm,
     training_inputs: tuple[dict, pd.DataFrame, pd.Series],
     tmp_path,
 ) -> None:
@@ -97,6 +97,7 @@ def test_train_agent_saves_validation_best_model_and_normalization(
         returns=returns,
         vix=vix,
         output_dir=output_dir,
+        seed=123,
     )
 
     assert metadata["selected_by"] == "highest_mean_validation_episode_reward"
@@ -108,6 +109,7 @@ def test_train_agent_saves_validation_best_model_and_normalization(
     saved_metadata = json.loads((output_dir / "metadata.json").read_text())
     assert saved_metadata["algorithm"] == algorithm
     assert saved_metadata["event"] == "smoke"
+    assert saved_metadata["seed"] == 123
 
 
 def test_train_agent_does_not_overwrite_existing_run_directory(

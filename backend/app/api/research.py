@@ -1,12 +1,14 @@
 """Read-only access to the existing CSC-475 research artifacts (never writes)."""
 
+import json
 import math
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yaml
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.backtests.runner import BacktestError, RunConfig, run_strategies
@@ -64,6 +66,363 @@ def research_summary() -> ResearchSummary:
             )
         )
     return ResearchSummary(source=str(path.name), rows=rows)
+
+
+def _dashboard_stats(rows: pd.DataFrame, column: str) -> dict[str, float | None]:
+    values = pd.to_numeric(rows[column], errors="coerce").dropna()
+    if values.empty:
+        return {"mean": None, "min": None, "max": None}
+    return {
+        "mean": float(values.mean()),
+        "min": float(values.min()),
+        "max": float(values.max()),
+    }
+
+
+def _dashboard_bool(value: Any) -> bool:
+    if pd.isna(value):
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return bool(value)
+
+
+def _dashboard_series(
+    event: str,
+    strategy: str,
+    *,
+    seeds: list[int],
+    seed_count: int,
+    results_dir: Path,
+    assets: list[str],
+    multi_seed: bool,
+) -> dict[str, Any]:
+    table_dir = results_dir / ("robustness/tables" if multi_seed else "tables")
+    if multi_seed and strategy in ("ppo", "ddpg"):
+        paths = [
+            table_dir / f"daily_{event}_{strategy}_seed_{seed}.csv"
+            for seed in seeds
+        ]
+    else:
+        paths = [table_dir / f"daily_{event}_{strategy}.csv"]
+    missing = [path.name for path in paths if not path.is_file()]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Daily research results are missing: {', '.join(missing)}.",
+        )
+
+    frames = [pd.read_csv(path, parse_dates=["Date"]) for path in paths]
+    dates = frames[0]["Date"]
+    if any(not frame["Date"].equals(dates) for frame in frames[1:]):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Daily result dates do not align for {event}/{strategy}.",
+        )
+
+    values = [frame["portfolio_value"].to_numpy(dtype=float) for frame in frames]
+    drawdowns = [
+        value / pd.Series(value).cummax().to_numpy() - 1.0 for value in values
+    ]
+    costs = [
+        frame["transaction_cost"].to_numpy(dtype=float).cumsum() for frame in frames
+    ]
+    turnovers = [frame["turnover"].to_numpy(dtype=float) for frame in frames]
+
+    def average(items: list[Any]) -> list[float]:
+        return [float(v) for v in pd.DataFrame(items).mean(axis=0).to_numpy()]
+
+    def low(items: list[Any]) -> list[float]:
+        return [float(v) for v in pd.DataFrame(items).min(axis=0).to_numpy()]
+
+    def high(items: list[Any]) -> list[float]:
+        return [float(v) for v in pd.DataFrame(items).max(axis=0).to_numpy()]
+
+    weight_values = {
+        asset: average(
+            [frame[f"weight_{asset}"].to_numpy(dtype=float) for frame in frames]
+        )
+        for asset in assets
+    }
+    return {
+        "dates": dates.dt.strftime("%Y-%m-%d").tolist(),
+        "sample_returns": [
+            frame["net_return"].to_numpy(dtype=float).tolist() for frame in frames
+        ],
+        "sample_transaction_costs": [
+            frame["transaction_cost"].to_numpy(dtype=float).tolist()
+            for frame in frames
+        ],
+        "portfolio_value": average(values),
+        "value_min": low(values),
+        "value_max": high(values),
+        "drawdown": average(drawdowns),
+        "drawdown_min": low(drawdowns),
+        "drawdown_max": high(drawdowns),
+        "cumulative_cost": average(costs),
+        "turnover": average(turnovers),
+        "weights": weight_values,
+        "seed_count": seed_count if multi_seed and strategy in ("ppo", "ddpg") else 1,
+    }
+
+
+@router.get("/dashboard")
+def research_dashboard(
+    events: list[str] | None = Query(default=None),
+    strategies: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    """Return only selected research data, preferring a complete multi-seed study."""
+    config = _read_config()
+    selected_events = list(dict.fromkeys(events or EVENT_ORDER))
+    selected_strategies = list(dict.fromkeys(strategies or STRATEGY_ORDER))
+    invalid_events = [event for event in selected_events if event not in config["events"]]
+    invalid_strategies = [
+        strategy for strategy in selected_strategies if strategy not in STRATEGY_ORDER
+    ]
+    if invalid_events or invalid_strategies:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unknown event(s): {invalid_events}; "
+                f"unknown strategy/strategies: {invalid_strategies}."
+            ),
+        )
+    if not selected_events or not selected_strategies:
+        raise HTTPException(
+            status_code=422,
+            detail="Select at least one downturn and one strategy.",
+        )
+
+    results_dir = get_settings().results_dir
+    manifest_path = results_dir / "robustness" / "study.json"
+    robust_metrics_path = results_dir / "robustness" / "tables" / "metrics_by_seed.csv"
+    multi_seed = False
+    seeds: list[int] = []
+    if manifest_path.is_file() and robust_metrics_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        seeds = [int(seed) for seed in manifest.get("seeds", [])]
+        multi_seed = bool(manifest.get("complete")) and len(seeds) >= 2
+        if multi_seed:
+            expected = [
+                results_dir
+                / "robustness"
+                / "tables"
+                / f"daily_{event}_{strategy}_seed_{seed}.csv"
+                for event in config["events"]
+                for strategy in ("ppo", "ddpg")
+                for seed in seeds
+            ]
+            multi_seed = all(path.is_file() for path in expected)
+
+    baseline_path = results_dir / "tables" / "summary_metrics.csv"
+    if not multi_seed and not baseline_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Research results not found. Run `python -m src.experiments.run_experiment` first.",
+        )
+    metric_path = robust_metrics_path if multi_seed else baseline_path
+    metrics_frame = pd.read_csv(metric_path)
+    if "seed" not in metrics_frame:
+        metrics_frame["seed"] = "baseline"
+
+    events_result: list[dict[str, Any]] = []
+    for event_name in selected_events:
+        event_metrics: dict[str, Any] = {}
+        for strategy in selected_strategies:
+            rows = metrics_frame[
+                (metrics_frame["event"] == event_name)
+                & (metrics_frame["strategy"].str.lower() == strategy)
+                & (metrics_frame["section"] == "downturn")
+            ]
+            if multi_seed and strategy in ("ppo", "ddpg"):
+                rows = rows[rows["seed"] != "baseline"]
+                if rows["seed"].nunique() != len(seeds):
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Expected {len(seeds)} seeds for {event_name}/{strategy}.",
+                    )
+            else:
+                rows = rows[rows["seed"] == "baseline"] if multi_seed else rows
+            if rows.empty:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Summary metrics are missing for {event_name}/{strategy}.",
+                )
+
+            recovery_rows = metrics_frame[
+                (metrics_frame["event"] == event_name)
+                & (metrics_frame["strategy"].str.lower() == strategy)
+                & (metrics_frame["section"] == "recovery")
+            ]
+            if multi_seed and strategy in ("ppo", "ddpg"):
+                recovery_rows = recovery_rows[recovery_rows["seed"] != "baseline"]
+            elif multi_seed:
+                recovery_rows = recovery_rows[recovery_rows["seed"] == "baseline"]
+
+            metric_fields = (
+                "total_return",
+                "annualized_return",
+                "annualized_volatility",
+                "sharpe_ratio",
+                "maximum_drawdown",
+                "transaction_costs",
+            )
+            metric_summary = {
+                field: _dashboard_stats(rows, field) for field in metric_fields
+            }
+            recovered = (
+                sum(
+                    _dashboard_bool(value)
+                    for value in recovery_rows["recovered_within_24_months"]
+                )
+                if "recovered_within_24_months" in recovery_rows
+                else 0
+            )
+            event_metrics[strategy] = {
+                "metrics": metric_summary,
+                "recovery": {
+                    "recovery_return_from_trough": _dashboard_stats(
+                        recovery_rows, "recovery_return_from_trough"
+                    ),
+                    "recovery_time_trading_days": _dashboard_stats(
+                        recovery_rows, "recovery_time_trading_days"
+                    ),
+                    "ending_value": _dashboard_stats(
+                        recovery_rows,
+                        "recovery_ending_value"
+                        if "recovery_ending_value" in recovery_rows
+                        else "ending_value",
+                    ),
+                    "recovered_count": int(recovered),
+                    "sample_count": int(len(recovery_rows)),
+                },
+                "series": _dashboard_series(
+                    event_name,
+                    strategy,
+                    seeds=seeds,
+                    seed_count=len(seeds),
+                    results_dir=results_dir,
+                    assets=config["assets"],
+                    multi_seed=multi_seed,
+                ),
+            }
+        events_result.append(
+            {
+                "event": event_name,
+                "windows": config["events"][event_name],
+                "strategies": event_metrics,
+            }
+        )
+
+    return {
+        "source": "five_seed_study" if multi_seed else "original_single_seed",
+        "seed_count": len(seeds) if multi_seed else 1,
+        "reference_capital": float(config["portfolio"]["initial_capital"]),
+        "annualization_trading_days": int(
+            config["backtest"]["metrics"]["annualization_trading_days"]
+        ),
+        "risk_free_rate_daily": float(
+            config["backtest"]["metrics"]["risk_free_rate_daily"]
+        ),
+        "strategies": selected_strategies,
+        "events": events_result,
+    }
+
+
+@router.get("/pipeline")
+def research_pipeline() -> dict[str, Any]:
+    """Report durable progress for the configured multi-seed artifact workflow."""
+    config = _read_config()
+    results_dir = get_settings().results_dir
+    robustness_dir = results_dir / "robustness"
+    model_root = robustness_dir / "models"
+    table_dir = robustness_dir / "tables"
+    summary_path = results_dir / "tables" / "summary_metrics.csv"
+    configured_seed = int(config["reproducibility"]["random_seed"])
+    seeds = list(range(configured_seed, configured_seed + 5))
+    algorithms = [algorithm.lower() for algorithm in config["reinforcement_learning"]["algorithms"]]
+    expected_models = len(config["events"]) * len(algorithms) * len(seeds)
+    completed_models = 0
+    completed_simulations = 0
+    for event in config["events"]:
+        for algorithm in algorithms:
+            for seed in seeds:
+                model_metadata = (
+                    model_root / event / algorithm / f"seed_{seed}" / "metadata.json"
+                )
+                if model_metadata.is_file():
+                    metadata = json.loads(model_metadata.read_text(encoding="utf-8"))
+                    if metadata.get("event") == event and metadata.get("algorithm", "").lower() == algorithm and metadata.get("seed") == seed:
+                        completed_models += 1
+                if (
+                    table_dir
+                    / f"daily_{event}_{algorithm}_seed_{seed}.csv"
+                ).is_file():
+                    completed_simulations += 1
+
+    manifest_path = robustness_dir / "study.json"
+    metrics_path = table_dir / "metrics_by_seed.csv"
+    robustness_ready = False
+    if manifest_path.is_file() and metrics_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        robustness_ready = (
+            bool(manifest.get("complete"))
+            and manifest.get("seed_count") == len(seeds)
+            and completed_models == expected_models
+            and completed_simulations == expected_models
+        )
+    run_started = model_root.is_dir() and any(model_root.rglob("metadata.json"))
+    if robustness_ready:
+        status = "complete"
+    elif run_started:
+        status = "running"
+    else:
+        status = "not_started"
+
+    returns_path = PROJECT_ROOT / "data" / "processed" / "daily_returns" / "daily_returns.csv"
+    vix_path = PROJECT_ROOT / "data" / "processed" / "daily_returns" / "vix.csv"
+    data_ready = returns_path.is_file() and vix_path.is_file()
+    steps = [
+        {
+            "id": "data",
+            "label": "Market data and periods",
+            "status": "complete" if data_ready else "pending",
+            "detail": "Nine ETFs and VIX aligned to the configured windows"
+            if data_ready
+            else "Processed returns and VIX are required",
+        },
+        {
+            "id": "training",
+            "label": "Train and validate PPO / DDPG",
+            "status": "complete" if robustness_ready else "in_progress" if run_started else "pending",
+            "detail": f"{completed_models}/{expected_models} models"
+            if run_started
+            else "Five seeds per algorithm and downturn",
+        },
+        {
+            "id": "simulation",
+            "label": "Test downturn and recovery",
+            "status": "complete" if robustness_ready else "in_progress" if completed_simulations else "pending",
+            "detail": f"{completed_simulations}/{expected_models} RL simulations; baseline results available"
+            if summary_path.is_file()
+            else f"{completed_simulations}/{expected_models} RL simulations",
+        },
+        {
+            "id": "comparison",
+            "label": "Compare strategies",
+            "status": "current",
+            "detail": "Review selected events, strategies, risk and recovery",
+        },
+    ]
+    return {
+        "status": status,
+        "completed_models": completed_models,
+        "completed_simulations": completed_simulations,
+        "total_models": expected_models,
+        "robustness_ready": robustness_ready,
+        "baseline_available": summary_path.is_file(),
+        "steps": steps,
+    }
 
 
 # Research Mode: a locked, read-only view of the CSC-475 experiment. Nothing here writes to

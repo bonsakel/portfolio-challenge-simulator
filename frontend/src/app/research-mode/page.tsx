@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { ResearchMode } from "@/components/ResearchMode";
+import { EXPANDED_MODE } from "@/lib/features";
 
 export default function ResearchModePage() {
+  if (!EXPANDED_MODE) redirect("/");
   return (
     <div className="flex flex-col gap-6">
       <header>

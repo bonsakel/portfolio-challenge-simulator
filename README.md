@@ -2,7 +2,9 @@
 
 ## PortfolioLab (interactive app, in development)
 
-PortfolioLab is a local web app (Next.js frontend + FastAPI backend) built on this research code. The research code in `src/` is unchanged and reused. Status: **Milestone 7** complete (scaffold, health check, read-only research results, symbol search, portfolio builder with saved portfolios, market-data provider/cache and Data Status page, backtests of the traditional strategies, risk analytics and interactive charts, PPO/DDPG backtests and model training in the Strategy Lab, and a locked Research Mode). Results are historical simulations, not investment advice.
+PortfolioLab is a local web app (Next.js frontend + FastAPI backend) for the CSC-475 research question: how do Equal Weight, Mean Variance, Minimum Variance, PPO and DDPG compare during the Global Financial Crisis, COVID-19 crash and 2022 downturn? Its default interface guides users through selecting events, strategies, starting capital and dates one question at a time; the right-side progress panel tracks setup, then switches to the research pipeline. Results focus on one downturn at a time, autoplay the selected performance chart with pause and timeline controls, and provide risk, allocation and recovery views. Historical simulations are not investment advice.
+
+The existing portfolio builder, custom backtests, data controls and Strategy Lab remain in the codebase but are hidden from the default interface. To restore those screens later, set `EXPANDED_MODE` to `true` in `frontend/src/lib/features.ts`. The backend endpoints remain available.
 
 Requirements: Python 3.11, Node.js 20.9+ (tested on 22.16), npm.
 
@@ -24,7 +26,9 @@ python -m pytest            # research + backend
 (cd frontend && npm test && npm run lint)
 ```
 
-Troubleshooting: if the sidebar shows "Backend offline", start the backend and check port 8000 is free (`lsof -i :8000`). If search returns "Symbol index not built", run the `update_symbol_index` command above. Optional settings use the `PORTFOLIOLAB_` prefix (see `.env.example`); no API key is required.
+Troubleshooting: if research results cannot load, start the backend and check port 8000 is free (`lsof -i :8000`). Optional settings use the `PORTFOLIOLAB_` prefix (see `.env.example`); no API key is required.
+
+**RL robustness run.** To retrain PPO and DDPG with five seeds for each downturn and compare their variability with the traditional strategies, run `python -m src.experiments.run_seed_study`. This runs 30 RL trainings at the configured 100,000 timesteps each. It writes models and daily outputs to `results/robustness/`, leaving the original `results/tables/` and `results/models/` artifacts unchanged. The dashboard switches to the five-seed results only after the study finishes.
 
 **Symbol search and portfolios.** Search uses a local index built from the [NASDAQ Trader symbol directory](https://www.nasdaqtrader.com/dynamic/SymDir/) (currently listed US stocks and ETFs; test issues, warrants, units, rights and preferreds are excluded; `.` class separators become `-`, e.g. `BRK-B`). Delisted symbols are absent, so custom backtests are selected-universe studies. Being listed does not guarantee price history exists; use "Check data coverage" in the Portfolio Builder to verify it. Portfolios are stored in local SQLite (`data/portfoliolab/`, git-ignored). Validation is long-only and fully invested: weights are never silently normalized, and a per-asset cap `c` needs at least ⌈1/c⌉ assets (30% → 4).
 

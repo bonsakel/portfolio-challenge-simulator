@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { StrategyLab } from "@/components/StrategyLab";
+import { EXPANDED_MODE } from "@/lib/features";
 
 export default function StrategyLabPage() {
+  if (!EXPANDED_MODE) redirect("/");
   return (
     <div className="flex flex-col gap-6">
       <header>

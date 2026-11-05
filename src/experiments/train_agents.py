@@ -115,6 +115,7 @@ def train_agent(
     returns: pd.DataFrame,
     vix: pd.Series,
     output_dir: Path,
+    seed: int | None = None,
     total_timesteps: int | None = None,
     eval_freq: int | None = None,
 ) -> dict[str, Any]:
@@ -185,8 +186,10 @@ def train_agent(
         training=False,
     )
 
-    seed = int(config["reproducibility"]["random_seed"])
-    model = make_model(algorithm, train_env, config=config, seed=seed)
+    effective_seed = int(
+        config["reproducibility"]["random_seed"] if seed is None else seed
+    )
+    model = make_model(algorithm, train_env, config=config, seed=effective_seed)
     checkpoint_dir = output_dir / "selected"
     checkpoint_dir.mkdir()
     callback = SaveBestNormalizationCallback(
@@ -223,7 +226,7 @@ def train_agent(
             "training_timesteps_requested": timesteps,
             "evaluation_frequency_steps": validation_frequency,
             "algorithm_settings": training_settings,
-            "seed": seed,
+            "seed": effective_seed,
             "training_period": event["training"],
             "validation_period": event["validation"],
             "normalization": {
@@ -269,6 +272,7 @@ def main() -> None:
         default=ROOT / "data/processed/daily_returns/vix.csv",
     )
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--total-timesteps", type=int, default=None)
     parser.add_argument("--eval-freq", type=int, default=None)
     args = parser.parse_args()
@@ -288,6 +292,7 @@ def main() -> None:
         returns=returns,
         vix=vix,
         output_dir=output_dir,
+        seed=args.seed,
         total_timesteps=args.total_timesteps,
         eval_freq=args.eval_freq,
     )

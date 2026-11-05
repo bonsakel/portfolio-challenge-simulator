@@ -1,30 +1,25 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { Nav } from "@/components/Nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PortfolioLab",
-  description: "Historical portfolio research and backtesting simulator",
+  title: "Strategy comparison | PortfolioLab",
+  description: "Compare traditional and reinforcement-learning portfolio strategies during market downturns.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">
-        <div className="flex min-h-screen flex-col md:flex-row">
-          <aside className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-line bg-panel p-4 flex flex-col gap-6">
-            <div>
-              <div className="text-lg font-semibold tracking-tight">PortfolioLab</div>
-              <div className="text-xs text-muted">Historical research simulator</div>
+      <body className="min-h-screen bg-bg text-ink">
+        <div className="min-h-screen">
+          <header className="border-b border-line bg-panel">
+            <div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 md:px-8">
+              <div className="text-sm font-semibold tracking-tight">PortfolioLab</div>
+              <Nav />
             </div>
-            <Nav />
-            <div className="md:mt-auto">
-              <ConnectionStatus />
-            </div>
-          </aside>
-          <main className="min-w-0 flex-1 p-4 md:p-8 max-w-6xl">{children}</main>
+          </header>
+          <main className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">{children}</main>
         </div>
       </body>
     </html>

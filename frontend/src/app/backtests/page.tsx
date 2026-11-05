@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { BacktestRunner } from "@/components/BacktestRunner";
+import { EXPANDED_MODE } from "@/lib/features";
 
 export default function BacktestsPage() {
+  if (!EXPANDED_MODE) redirect("/");
   return (
     <div className="flex flex-col gap-6">
       <header>
